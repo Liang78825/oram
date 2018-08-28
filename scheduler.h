@@ -8,7 +8,7 @@
 #include <time.h>
 #include "utilities.h"
 
-#define SIG_START 0
+#define SIG_START -1
 #define SIG_LOADING 1
 #define SIG_READY 2
 
@@ -33,9 +33,11 @@ typedef struct REQ_t{
 } REQ;
 
 
-void scheduler_init(ROB *rob_table, REQ *request);
+void scheduler_init(ROB *rob_table, REQ *request, int* in_memory_list);
 
-int schedule(ROB *rob_table, REQ *request, int * permutation, int *in_memory_list);
+int schedule(ROB *rob_table, REQ *request, int * permutation, int *in_memory_list, int N);
+
+int is_in_memory(int * in_memory_list, int address);
 
 void scheduler_deinit(ROB *rob_table, REQ *request);
 #endif /* scheduler_h */

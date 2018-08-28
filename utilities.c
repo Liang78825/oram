@@ -28,14 +28,14 @@ void array_decrypt(uint8_t *data, uint8_t *key, int size){
 }
 
 void otp_crypto(uint8_t *data, uint8_t *key, int size){
-    int *key_int = (int*) key;
-    int *data_int = (int*) data;
-    for(int i=0; i<size/16; i = i+4){
-        data_int[i*4] = data_int[i*4] ^ key_int[0];
-        data_int[i*4 + 1] = data_int[i*4 + 1] ^ key_int[1];
-        data_int[i*4 + 2] = data_int[i*4 + 2] ^ key_int[2];
-        data_int[i*4 + 3] = data_int[i*4 + 3] ^ key_int[3];
-    }
+//    int *key_int = (int*) key;
+//    int *data_int = (int*) data;
+//    for(int i=0; i<size/16; i = i+4){
+//        data_int[i*4] = data_int[i*4] ^ key_int[0];
+//        data_int[i*4 + 1] = data_int[i*4 + 1] ^ key_int[1];
+//        data_int[i*4 + 2] = data_int[i*4 + 2] ^ key_int[2];
+//        data_int[i*4 + 3] = data_int[i*4 + 3] ^ key_int[3];
+//    }
 }
 
 

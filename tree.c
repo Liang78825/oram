@@ -78,7 +78,9 @@ void tree_access(uint8_t *data, uint8_t *tree, int *pos_map, Stash *stash, int a
     pos_map[address] = rand()%((tree_size + 1)/2);
     
     // fetch bucket from memory
-    
+//    for(int i=0; i<tree_size; i++){
+//        printf("%d\n", pos_map[i]);
+//    }
     uint8_t *temp_bucket = (uint8_t*) malloc((block_size + 4) * Z);
     int level = log_int(tree_size + 1);
     int pos;
@@ -96,6 +98,10 @@ void tree_access(uint8_t *data, uint8_t *tree, int *pos_map, Stash *stash, int a
         for(int j=0; j<Z; j++){
             ID = (int*)(temp_bucket + j * (block_size + 4));
             aa = *ID;
+//            for(int k=0; k<block_size; k++){
+//                printf("%d ",temp_bucket[ j * (block_size + 4) + 4+ k]);
+//            }
+//            printf("\n\n");
             if(*ID != -1){
                 stash_insert(temp_bucket + j * (block_size + 4) + 4, *ID, stash);
             }
@@ -103,6 +109,7 @@ void tree_access(uint8_t *data, uint8_t *tree, int *pos_map, Stash *stash, int a
     }
 
     free(temp_bucket);
+    
     
     // write or read data in stash
     pos = -1;

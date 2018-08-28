@@ -31,7 +31,7 @@ void File_read_with_map(uint8_t *data, int *pos_map, int address){
     FILE *fd = NULL;
     char file_name[10] = "";
     sprintf(file_name, "1-%d.txt", address);
-    fd = fopen(file_name, "rb");
+    fd = fopen(file_name, "r");
     fread(pos_map, 1, map_size, fd);
     fread(data, 1, part_size, fd);
     fclose(fd);
@@ -45,7 +45,7 @@ void File_write_with_map(uint8_t *data, int *pos_map, int address){
     FILE *fd = NULL;
     char file_name[10] = "";
     sprintf(file_name, "1-%d.txt", address);
-    fd = fopen(file_name, "wb");
+    fd = fopen(file_name, "w");
     fwrite(pos_map, 1, map_size, fd);
     fwrite(data, 1, part_size, fd);
     fclose(fd);
@@ -57,10 +57,10 @@ void *File_read(void *input_t){
     FILE *fd = NULL;
     char file_name[15] = "";
     sprintf(file_name, "%d-%d.txt", input->phase, input->address);
-    fd = fopen(file_name, "wb");
+    fd = fopen(file_name, "r");
     fread(input->data_buffer, 1, data_size, fd);
     fclose(fd);
-    remove(file_name);
+//    remove(file_name);
     return NULL;
 }
 
@@ -70,7 +70,7 @@ void *File_write(void *input_t){
     FILE *fd = NULL;
     char file_name[15] = "";
     sprintf(file_name, "%d-%d.txt", input->phase, input->address);
-    fd = fopen(file_name, "wb");
+    fd = fopen(file_name, "w");
     fwrite(input->data_buffer, 1, data_size, fd);
     fclose(fd);
     return NULL;

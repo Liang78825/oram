@@ -19,7 +19,7 @@ void PartInit(uint8_t **partition, Stash *stash, int **pos_map){
 }
 
 
-void Load_Partition_From_file(uint8_t **partition, Stash *stash, int **pos_map, int pos, uint8_t *key){
+void Load_Partition(uint8_t **partition, Stash *stash, int **pos_map, uint8_t *key, uint8_t *input, int pos){
     
     int part_size = (block_size + 4)*tree_size * Z;
     int pos_map_size = tree_size * sizeof(int);
@@ -30,19 +30,21 @@ void Load_Partition_From_file(uint8_t **partition, Stash *stash, int **pos_map, 
 
     pos_map[pos] = (int*) malloc(pos_map_size);
     
-    File_read_with_map(partition[pos], pos_map[pos], pos);
-    
+    memcpy(pos_map[pos], input, pos_map_size);
+    memcpy(partition[pos], input + pos_map_size, part_size);
     uint8_t *temp_map = (uint8_t*)pos_map[pos];
     
     otp_crypto(temp_map, key, pos_map_size);
     otp_crypto(partition[pos], key, part_size);
 }
 
-void Write_Partition_to_File(uint8_t **partition, Stash *stash, int **pos_map, int pos, uint8_t *key){
+void Write_Partition(uint8_t **partition, Stash *stash, int **pos_map, uint8_t *key, uint8_t *input, int pos){
+    
     uint8_t *temp_map = (uint8_t*)pos_map[pos];
     otp_crypto(temp_map, key, tree_size * sizeof(int));
+    memcpy(input, temp_map, tree_size * sizeof(int));
     otp_crypto(partition[pos], key, (block_size + 4)*tree_size * Z);
-    File_write_with_map(partition[pos], pos_map[pos], pos);
+    memcpy(input + tree_size * sizeof(int), partition[pos],  (block_size + 4)*tree_size * Z);
     free(pos_map[pos]);
     free(partition[pos]);
 }
@@ -50,12 +52,13 @@ void Write_Partition_to_File(uint8_t **partition, Stash *stash, int **pos_map, i
 void Fully_Shuffle(int *permutation, uint8_t ** public_key){
     // first devide all partitions to sqrt(N) blocks
     
-    int sub_block_size = sqrt_int(block_size);
+    int sub_block_size = sqrt_int(partition_num);
     uint8_t **data_buffer = (uint8_t**)malloc(sub_block_size*sizeof(uint8_t*));
     uint8_t **temp_buffer = (uint8_t**)malloc(sub_block_size*sizeof(uint8_t*));
     
     int data_size = (block_size + 4) * Z * tree_size + tree_size * 4;
-    int *new_permutation = (int *)malloc(sub_block_size*sizeof(int));
+    int *new_permutation = (int *)malloc(partition_num*sizeof(int));
+    int *permutation_buffer = (int *)malloc(sub_block_size*sizeof(int));
     
     //allocate buffer for shuffling
     for(int i=0; i<sub_block_size;i++){
@@ -71,19 +74,20 @@ void Fully_Shuffle(int *permutation, uint8_t ** public_key){
             input.data_buffer = data_buffer[j];
             input.phase = 1;
             File_read(&input);
-            new_permutation[j] = permutation[i*sub_block_size + j];
+            permutation_buffer[j] = permutation[i*sub_block_size + j];
         }
-        Inmemory_shuffle(data_buffer, temp_buffer, new_permutation, public_key);
+
+        Inmemory_shuffle(data_buffer, temp_buffer, permutation_buffer, public_key);
+
         //write the shuffled data to memory
         for(int j=0; j<sub_block_size; j++){
             input.address = j*sub_block_size + i;
             input.data_buffer = data_buffer[j];
             input.phase = 2;
             File_write(&input);
-            permutation[j*sub_block_size+i] = new_permutation[j];
+            new_permutation[j*sub_block_size+i] = permutation_buffer[j];
         }
     }
-    
     
     // phase II, reshuffle block inside each bucket
     for(int i=0; i< sub_block_size; i++){
@@ -93,19 +97,18 @@ void Fully_Shuffle(int *permutation, uint8_t ** public_key){
             input.data_buffer = data_buffer[j];
             input.phase = 2;
             File_read(&input);
-            new_permutation[j] = permutation[i*sub_block_size + j];
+            permutation_buffer[j] = new_permutation[i*sub_block_size + j];
         }
-        Inmemory_shuffle(data_buffer, temp_buffer, new_permutation, public_key);
+        Inmemory_shuffle(data_buffer, temp_buffer, permutation_buffer, public_key);
         //write the shuffled data to memory
         for(int j=0; j<sub_block_size; j++){
             input.address = i*sub_block_size + j;
             input.data_buffer = data_buffer[j];
             input.phase = 2;
             File_write(&input);
-            permutation[i*sub_block_size + j] = new_permutation[j];
+            permutation[i*sub_block_size + j] = permutation_buffer[j];
         }
     }
-    
     // free data
     for(int i=0; i< sub_block_size; i++){
         free(temp_buffer[i]);
@@ -116,8 +119,8 @@ void Fully_Shuffle(int *permutation, uint8_t ** public_key){
     free(data_buffer);
 }
 
-void Inmemory_shuffle(uint8_t ** data_buffer, uint8_t **temp_buffer, int*new_permutation, uint8_t ** public_key){
-    
+void Inmemory_shuffle(uint8_t ** data_buffer, uint8_t **temp_buffer, int *new_permutation, uint8_t ** public_key){
+    srand(clock());
     // divide the shuffle into log( sqrt(N)  ) step, each step swap sqrt(N)/2 of blocks
     
     int step_num = log_int(sqrt_int(partition_num));
@@ -166,7 +169,7 @@ void Inmemory_shuffle(uint8_t ** data_buffer, uint8_t **temp_buffer, int*new_per
                 }
             }
             else{
-                // swap
+                // not swap
                 if(flag ==0){
                     permutation_buffer[pos1] = new_permutation[2*j];
                     permutation_buffer[pos2] = new_permutation[2*j + 1];
@@ -183,7 +186,19 @@ void Inmemory_shuffle(uint8_t ** data_buffer, uint8_t **temp_buffer, int*new_per
         group_num = group_num/2;
         flag = !flag;
     }
-    free(new_permutation);
+    
+    
+    if(flag == 1){
+        
+        for(int i=0; i< sqrt_int(partition_num); i++){
+            new_permutation[i] = permutation_buffer[i];
+        }
+        uint8_t ** temp = data_buffer;
+        data_buffer = temp_buffer;
+        temp_buffer = temp;
+    }
+    free(permutation_buffer);
+    
 }
 
 void Part_Evict(uint8_t **partition, Stash *stash, int **pos_map, int *permutaition, int *in_memory_list, uint8_t ** public_key, uint8_t *aes_key, int phase){
@@ -194,43 +209,63 @@ void Part_Evict(uint8_t **partition, Stash *stash, int **pos_map, int *permutait
     //Write data to the correspond partition in file
     int pos;
     int step;
-    if(phase == 1){
+    if(phase == 0){
         pos = sqrt_int(partition_num) - 1;
         step = sqrt_int(partition_num);
     }else{
         pos = partition_num - sqrt_int(partition_num);
         step = 1;
     }
+    
+    for(int i=0; i< partition_num; i++){
+        printf("%d ", permutaition[i]);
+    }
+    printf("\n");
+    
     int data_size = (block_size + 4) * Z * tree_size + tree_size * 4;
     uint8_t ** data_buffer = (uint8_t**) malloc(sqrt_int(partition_num)*sizeof(uint8_t*));
     uint8_t **temp_buffer = (uint8_t**) malloc(sqrt_int(partition_num)*sizeof(uint8_t*));
     int * new_permutation = (int*) malloc(sqrt_int(partition_num) * sizeof(int));
-    int flag = 0;
-    int swap_buffer;
+    int * permutation_buffer = (int *) malloc(partition_num * sizeof(int));
     char new_file_name[15];
     char old_file_name[15];
     // phase I: divide partition into the end of each sqrt(N) bucket
     // step 1: reorder partitions
-    for(int i=0; i< sqrt_int(partition_num); i++){
-        if((in_memory_list[i] + 1) %partition_num != 0){
-            // not in the target pos, search a empty space to swap
-            for(; pos<partition_num && flag == 0; pos += step){
-                flag = 1;
-                // detect if pos already in the memory
-                for(int j=0; j<sqrt_int(partition_num); j++ ){
-                    if(in_memory_list[j] == pos)
-                        flag=0;
-                }
+    
+    // 1  _  3    4  5  _    7  _  9
+    // 1  3  4    5  7  9    _  _  _
+    printf("%d %d\n", in_memory_list[0], in_memory_list[1]);
+        int aa, bb;
+    for(int i=0, j=0; i<partition_num; i++){
+        if(is_in_memory(in_memory_list, permutaition[i]) >= 0){
+            aa = 0;
+        }
+        else{
+           if(j>=pos){
+               break;
             }
             //swap in_memory_list[i] and pos
-            sprintf(old_file_name, "%.txt", pos);
-            sprintf(new_file_name, "%.txt", in_memory_list[i]);
-            swap_buffer = permutaition[pos];
-            permutaition[pos] = permutaition[in_memory_list[i]];
-            permutaition[in_memory_list[i]] = swap_buffer;
-            in_memory_list[i] = pos;
+            sprintf(old_file_name, "%d-%d.txt",phase, i);
+            sprintf(new_file_name, "temp-%d.txt", j);
+            rename(old_file_name, new_file_name);
+            permutation_buffer[j] = permutaition[i];
+            
+            j++;
         }
     }
+
+    for(int i=0; i<= pos; i++){
+        sprintf(old_file_name, "temp-%d.txt", i);
+        sprintf(new_file_name, "%d-%d.txt",phase, i);
+        rename(old_file_name, new_file_name);
+        aa = permutaition[i];
+        bb = permutation_buffer[i];
+        permutaition[i] = permutation_buffer[i];
+    }
+    free(permutation_buffer);
+    
+
+    
     // step 2: evict stash, tree, pos_map
     for(int i=0; i<sqrt_int(partition_num); i++){
         data_buffer[i] = malloc(data_size);
@@ -238,15 +273,16 @@ void Part_Evict(uint8_t **partition, Stash *stash, int **pos_map, int *permutait
         tree_free(pos_map[i], partition[i], aes_key, stash + i);
         memcpy(data_buffer[i], pos_map[i], tree_size * 4);
         memcpy(data_buffer[i] + tree_size * 4, partition[i], (block_size + 4) * Z * tree_size);
-        otp_crypto(data_buffer[i], public_key[permutaition[in_memory_list[i]]], data_size);
+        otp_crypto(data_buffer[i], public_key[in_memory_list[i]], data_size);
         free(pos_map[i]);
         free(partition[i]);
-        new_permutation[i] = permutaition[in_memory_list[i]];
+        new_permutation[i] = in_memory_list[i];
     }
     Inmemory_shuffle(data_buffer, temp_buffer, new_permutation, public_key);
     
+    
     // write partition to file
-    if(phase == 1){
+    if(phase == 0){
         pos = sqrt_int(partition_num) - 1;
     }
     else{
@@ -259,22 +295,31 @@ void Part_Evict(uint8_t **partition, Stash *stash, int **pos_map, int *permutait
         input.phase = phase;
         input.data_buffer = data_buffer[i];
         File_write(&input);
+        in_memory_list[i] = -1;
     }
+    
+    printf("after ");
+    for(int i=0; i< partition_num; i++){
+        printf("%d ", permutaition[i]);
+    }
+    printf("\n");
+    
     // free data
     for(int i=0; i< sqrt_int(partition_num); i++){
+        in_memory_list[i] = -1;
         free(temp_buffer[i]);
         free(data_buffer[i]);
     }
-    free(new_permutation);
+//    free(new_permutation);
     free(temp_buffer);
     free(data_buffer);
-    free(in_memory_list);
+    
 }
 
-void Partition_Access(uint8_t **partition, Stash *stash, int **pos_map, uint8_t *aes_key, int *permutaition, REQ *request, int N){
+void Partition_Access(uint8_t **partition, Stash *stash, int **pos_map, uint8_t *aes_key, int *permutaition, REQ request, int N){
 
     for(int i=0; i<N; i++){
-        tree_access(request->data[i], partition[i], pos_map[i], &stash[i], request->tree_address[i], request->op[i], aes_key);
+        tree_access(request.data[i], partition[i], pos_map[i], &stash[i], request.tree_address[i], request.op[i], aes_key);
     }
     
 }

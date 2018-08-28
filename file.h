@@ -11,7 +11,7 @@
 #include "aesni.h"
 #include "tree.h"
 
-#endif /* file_h */
+
 
 typedef struct file_input{
     uint8_t* data_buffer;
@@ -19,7 +19,7 @@ typedef struct file_input{
     int phase;
 } FILE_INPUT;
 
-
+#endif /* file_h */
 
 void FileInit(unsigned char **public_key, uint8_t* aes_key);
 
